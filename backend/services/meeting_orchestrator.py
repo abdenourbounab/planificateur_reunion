@@ -12,7 +12,8 @@ from services.availability_service import AvailabilityService
 from services.invitation_agent import InvitationAgent
 from services.calendar_event_service import CalendarEventService
 from services.user_service import UserService
-from services.notification_service import NotificationService
+from services.gmail_api_service import GmailAPIService
+from services.google_calendar_service import GoogleCalendarService
 from config import Config
 from dateutil import parser as date_parser
 import json
@@ -27,11 +28,12 @@ class MeetingOrchestrator:
         self.llm = ChatGroq(
             model=Config.ORCHESTRATOR_MODEL,
             temperature=Config.ORCHESTRATOR_TEMPERATURE,
-            groq_api_key=Config.GROQ_API_KEY
+            api_key=Config.GROQ_API_KEY
         )
         
         self.invitation_agent = InvitationAgent()
-        self.notification_service = NotificationService()
+        self.gmail_service = GmailAPIService()
+        self.google_calendar_service = GoogleCalendarService()
         
         # Charger les templates depuis les fichiers
         self.slot_selection_template = self._load_slot_selection_template()
@@ -40,6 +42,86 @@ class MeetingOrchestrator:
         self.json_parser = JsonOutputParser()
         self.selection_chain = self.slot_selection_template | self.llm | self.json_parser
         self.parsing_chain = self.parsing_template | self.llm | self.json_parser
+    
+    def _generate_natural_response(
+        self,
+        subject: str,
+        selected_slot: Dict,
+        participants: List[Dict],
+        email_results: Dict,
+        google_calendar_event: Optional[Dict],
+        reasoning: str
+    ) -> str:
+        """
+        Génère une réponse en langage naturel pour confirmer la planification
+        
+        Args:
+            subject: Sujet de la réunion
+            selected_slot: Créneau sélectionné
+            participants: Liste des participants
+            email_results: Résultats d'envoi des emails
+            google_calendar_event: Événement Google Calendar créé
+            reasoning: Raisonnement du choix du créneau
+            
+        Returns:
+            Message en langage naturel
+        """
+        # Formater la date et l'heure
+        start_datetime = selected_slot["start"]
+        end_datetime = selected_slot["end"]
+        
+        date_str = start_datetime.strftime("%A %d %B %Y")
+        start_time_str = start_datetime.strftime("%H:%M")
+        end_time_str = end_datetime.strftime("%H:%M")
+        
+        # Lister les participants
+        participant_names = ", ".join([p["name"] for p in participants])
+        
+        # Compter les emails envoyés avec succès
+        emails_sent = sum(1 for result in email_results.values() if result.get("sent", False))
+        total_emails = len(email_results)
+        
+        # Construire le message
+        message_parts = []
+        
+        # Confirmation principale
+        message_parts.append(f"✅ **Réunion planifiée avec succès !**\n")
+        message_parts.append(f"**Sujet :** {subject}\n")
+        message_parts.append(f"**Date :** {date_str}")
+        message_parts.append(f"**Horaire :** {start_time_str} - {end_time_str}\n")
+        
+        # Participants
+        message_parts.append(f"**Participants ({len(participants)}) :**")
+        message_parts.append(f"{participant_names}\n")
+        
+        # Raisonnement
+        if reasoning:
+            message_parts.append(f"**Pourquoi ce créneau ?**")
+            message_parts.append(f"{reasoning}\n")
+        
+        # Statut Google Calendar
+        if google_calendar_event:
+            message_parts.append(f"📅 **Google Calendar :** Événement créé avec succès")
+            if google_calendar_event.get("htmlLink"):
+                message_parts.append(f"   Lien : {google_calendar_event['htmlLink']}\n")
+        else:
+            message_parts.append(f"⚠️ **Google Calendar :** Non synchronisé (événement créé en local uniquement)\n")
+        
+        # Statut des invitations
+        if emails_sent == total_emails:
+            message_parts.append(f"📧 **Invitations :** Toutes les invitations ont été envoyées avec succès ({emails_sent}/{total_emails})")
+        elif emails_sent > 0:
+            message_parts.append(f"📧 **Invitations :** {emails_sent}/{total_emails} invitations envoyées")
+            failed_participants = [
+                email_results[pid]["user_name"] 
+                for pid in email_results 
+                if not email_results[pid].get("sent", False)
+            ]
+            message_parts.append(f"   ⚠️ Échec pour : {', '.join(failed_participants)}")
+        else:
+            message_parts.append(f"❌ **Invitations :** Aucune invitation n'a pu être envoyée")
+        
+        return "\n".join(message_parts)
     
     def _load_slot_selection_template(self):
         """Charge le template de sélection de créneau depuis les fichiers"""
@@ -201,17 +283,26 @@ class MeetingOrchestrator:
             objective=objective
         )
         
-        # Étape 7: Créer le format Google Calendar
-        google_calendar_event = self.invitation_agent.generate_google_calendar_format(
-            subject=subject,
-            participants=participants,
-            start_datetime=selected_slot["start"],
-            end_datetime=selected_slot["end"],
-            objective=objective,
-            invitation_message=invitation["message"]
-        )
+        # Étape 7: Créer l'événement dans Google Calendar pour tous les participants
+        google_calendar_event = None
+        attendee_emails = [p.get("email") for p in participants if p.get("email")]
         
-        # Étape 8: Créer les événements dans le calendrier pour chaque participant
+        try:
+            google_calendar_event = self.google_calendar_service.create_event(
+                summary=subject,
+                start_datetime=selected_slot["start"],
+                end_datetime=selected_slot["end"],
+                description=f"{objective}\n\nParticipants: {', '.join([p['name'] for p in participants])}",
+                attendees=attendee_emails,
+                location=""
+            )
+            if google_calendar_event:
+                print(f"✅ Événement synchronisé avec Google Calendar: {google_calendar_event.get('htmlLink')}")
+        except Exception as e:
+            print(f"⚠️ Impossible de synchroniser avec Google Calendar: {str(e)}")
+            print("   L'événement sera quand même créé en base de données locale")
+        
+        # Étape 8: Créer les événements dans le calendrier local pour chaque participant
         created_events = []
         for participant in participants:
             try:
@@ -227,7 +318,8 @@ class MeetingOrchestrator:
                 created_events.append({
                     "user_id": participant["id"],
                     "event_id": event.id,
-                    "user_name": participant["name"]
+                    "user_name": participant["name"],
+                    "google_calendar_link": google_calendar_event.get('htmlLink') if google_calendar_event else None
                 })
             except Exception as e:
                 created_events.append({
@@ -252,8 +344,8 @@ class MeetingOrchestrator:
                         objective=objective
                     )
                     
-                    # Envoyer l'email personnalisé
-                    success = self.notification_service.send_email(
+                    # Envoyer l'email personnalisé via Gmail API
+                    success = self.gmail_service.send_email(
                         to_email=email,
                         subject=personalized_invitation["subject"],
                         message=personalized_invitation["message"]
@@ -291,25 +383,38 @@ class MeetingOrchestrator:
                     "score": alt_slot["score"]
                 })
         
-        # Retourner le résultat complet
+        # Générer une réponse en langage naturel
+        natural_response = self._generate_natural_response(
+            subject=subject,
+            selected_slot=selected_slot,
+            participants=participants,
+            email_results=email_results,
+            google_calendar_event=google_calendar_event,
+            reasoning=reasoning
+        )
+        
+        # Retourner le résultat avec la réponse naturelle
         return {
             "success": True,
-            "meeting": {
-                "subject": subject,
-                "objective": objective,
-                "selected_slot": {
-                    "start": selected_slot["start"].isoformat(),
-                    "end": selected_slot["end"].isoformat(),
-                    "score": selected_slot["score"]
+            "message": natural_response,
+            "details": {
+                "meeting": {
+                    "subject": subject,
+                    "objective": objective,
+                    "selected_slot": {
+                        "start": selected_slot["start"].isoformat(),
+                        "end": selected_slot["end"].isoformat(),
+                        "score": selected_slot["score"]
+                    },
+                    "reasoning": reasoning,
+                    "alternative_slots": alternatives
                 },
-                "reasoning": reasoning,
-                "alternative_slots": alternatives
-            },
-            "participants": participants,
-            "invitation": invitation,
-            "google_calendar_format": google_calendar_event,
-            "created_events": created_events,
-            "email_notifications": email_results,
-            "total_slots_found": len(available_slots),
-            "llm_selection": selection_result
+                "participants": participants,
+                "invitation": invitation,
+                "google_calendar_event": google_calendar_event,
+                "created_events": created_events,
+                "email_notifications": email_results,
+                "total_slots_found": len(available_slots),
+                "llm_selection": selection_result
+            }
         }
