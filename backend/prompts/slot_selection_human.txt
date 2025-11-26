@@ -1,0 +1,10 @@
+Voici les créneaux disponibles:
+{available_slots}
+
+Contexte de la réunion:
+- Objet: {subject}
+- Durée: {duration} minutes
+- Nombre de participants: {participant_count}
+- Préférences: {preferences}
+
+Choisis le meilleur créneau et explique ton choix.
