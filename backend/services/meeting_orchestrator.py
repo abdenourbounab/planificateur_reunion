@@ -4,7 +4,7 @@ LLM principal qui coordonne la planification de réunions multi-participants
 """
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
@@ -38,10 +38,12 @@ class MeetingOrchestrator:
         # Charger les templates depuis les fichiers
         self.slot_selection_template = self._load_slot_selection_template()
         self.parsing_template = self._load_parsing_template()
+        self.natural_response_template = self._load_natural_response_template()
         
         self.json_parser = JsonOutputParser()
         self.selection_chain = self.slot_selection_template | self.llm | self.json_parser
         self.parsing_chain = self.parsing_template | self.llm | self.json_parser
+        self.natural_response_chain = self.natural_response_template | self.llm | StrOutputParser()
     
     def _generate_natural_response(
         self,
@@ -66,62 +68,44 @@ class MeetingOrchestrator:
         Returns:
             Message en langage naturel
         """
-        # Formater la date et l'heure
+        # Formater les données pour le LLM
         start_datetime = selected_slot["start"]
         end_datetime = selected_slot["end"]
         
-        date_str = start_datetime.strftime("%A %d %B %Y")
-        start_time_str = start_datetime.strftime("%H:%M")
-        end_time_str = end_datetime.strftime("%H:%M")
+        datetime_range = f"{start_datetime.strftime('%A %d %B %Y')} de {start_datetime.strftime('%H:%M')} à {end_datetime.strftime('%H:%M')}"
         
-        # Lister les participants
         participant_names = ", ".join([p["name"] for p in participants])
-        
-        # Compter les emails envoyés avec succès
-        emails_sent = sum(1 for result in email_results.values() if result.get("sent", False))
-        total_emails = len(email_results)
-        
-        # Construire le message
-        message_parts = []
-        
-        # Confirmation principale
-        message_parts.append(f"✅ **Réunion planifiée avec succès !**\n")
-        message_parts.append(f"**Sujet :** {subject}\n")
-        message_parts.append(f"**Date :** {date_str}")
-        message_parts.append(f"**Horaire :** {start_time_str} - {end_time_str}\n")
-        
-        # Participants
-        message_parts.append(f"**Participants ({len(participants)}) :**")
-        message_parts.append(f"{participant_names}\n")
-        
-        # Raisonnement
-        if reasoning:
-            message_parts.append(f"**Pourquoi ce créneau ?**")
-            message_parts.append(f"{reasoning}\n")
         
         # Statut Google Calendar
         if google_calendar_event:
-            message_parts.append(f"📅 **Google Calendar :** Événement créé avec succès")
-            if google_calendar_event.get("htmlLink"):
-                message_parts.append(f"   Lien : {google_calendar_event['htmlLink']}\n")
+            google_calendar_status = "Créé avec succès"
         else:
-            message_parts.append(f"⚠️ **Google Calendar :** Non synchronisé (événement créé en local uniquement)\n")
+            google_calendar_status = "Non synchronisé"
         
-        # Statut des invitations
+        # Statut des emails
+        emails_sent = sum(1 for result in email_results.values() if result.get("sent", False))
+        total_emails = len(email_results)
         if emails_sent == total_emails:
-            message_parts.append(f"📧 **Invitations :** Toutes les invitations ont été envoyées avec succès ({emails_sent}/{total_emails})")
+            email_status = f"Toutes les invitations envoyées avec succès ({emails_sent}/{total_emails})"
         elif emails_sent > 0:
-            message_parts.append(f"📧 **Invitations :** {emails_sent}/{total_emails} invitations envoyées")
             failed_participants = [
                 email_results[pid]["user_name"] 
                 for pid in email_results 
                 if not email_results[pid].get("sent", False)
             ]
-            message_parts.append(f"   ⚠️ Échec pour : {', '.join(failed_participants)}")
+            email_status = f"{emails_sent}/{total_emails} invitations envoyées, échec pour : {', '.join(failed_participants)}"
         else:
-            message_parts.append(f"❌ **Invitations :** Aucune invitation n'a pu être envoyée")
+            email_status = "Aucune invitation n'a pu être envoyée"
         
-        return "\n".join(message_parts)
+        # Générer la réponse avec le LLM
+        return self.natural_response_chain.invoke({
+            "subject": subject,
+            "datetime_range": datetime_range,
+            "participant_names": participant_names,
+            "reasoning": reasoning or "Créneau optimal sélectionné",
+            "google_calendar_status": google_calendar_status,
+            "email_status": email_status
+        })
     
     def _load_slot_selection_template(self):
         """Charge le template de sélection de créneau depuis les fichiers"""
@@ -154,6 +138,21 @@ class MeetingOrchestrator:
         ])
         
         self.parsing_chain = self.parsing_template | self.llm | self.json_parser
+    
+    def _load_natural_response_template(self):
+        """Charge le template de génération de réponse naturelle depuis les fichiers"""
+        prompts_dir = os.path.join(os.path.dirname(__file__), '..', 'prompts')
+        
+        with open(os.path.join(prompts_dir, 'natural_response_system.txt'), 'r', encoding='utf-8') as f:
+            system_prompt = f.read().strip()
+        
+        with open(os.path.join(prompts_dir, 'natural_response_human.txt'), 'r', encoding='utf-8') as f:
+            human_prompt = f.read().strip()
+        
+        return ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", human_prompt)
+        ])
     
     def parse_request(self, request_text: str) -> Dict:
         """
