@@ -1,22 +1,18 @@
 # Database Configuration
 
 """
-Configuration de la connexion à la base de données PostgreSQL.
+Configuration de la connexion à la base de données MySQL.
 Utilise SQLAlchemy pour l'ORM.
 """
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
+from config import Config
 
-# À configurer via variables d'environnement
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://user:password@localhost:5432/reunions_db"
-)
+DATABASE_URL = Config.DATABASE_URL
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, echo=Config.DEBUG)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -27,3 +23,6 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Importer les modèles pour qu'ils soient enregistrés avec Base
+from . import user, event_type, calendar_event
