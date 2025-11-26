@@ -90,13 +90,11 @@ def plan_meeting(
             request_text=request.text
         )
         
-        if not result["success"]:
+        if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("error", "Erreur de planification"))
         
-        return {
-            "success": True,
-            "data": result
-        }
+        # Retourner directement le résultat de l'orchestrateur
+        return result
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Format de date invalide: {str(e)}")

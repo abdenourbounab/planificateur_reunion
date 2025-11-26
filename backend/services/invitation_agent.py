@@ -19,7 +19,7 @@ class InvitationAgent:
         self.llm = ChatGroq(
             model=Config.INVITATION_MODEL,
             temperature=Config.INVITATION_TEMPERATURE,
-            groq_api_key=Config.GROQ_API_KEY
+            api_key=Config.GROQ_API_KEY
         )
         
         # Charger le template depuis les fichiers
@@ -201,53 +201,6 @@ RAPPEL:
                 "recipient": recipient_name,
                 "error": str(e)
             }
-    
-    def generate_google_calendar_format(
-        self,
-        subject: str,
-        participants: List[Dict],
-        start_datetime: datetime,
-        end_datetime: datetime,
-        objective: str,
-        invitation_message: str
-    ) -> Dict:
-        """
-        Génère le format pour Google Agenda
-        
-        Args:
-            subject: Objet de la réunion
-            participants: Liste des participants
-            start_datetime: Date et heure de début
-            end_datetime: Date et heure de fin
-            objective: Objectif de la réunion
-            invitation_message: Message d'invitation généré
-            
-        Returns:
-            Dictionnaire au format Google Calendar
-        """
-        return {
-            "summary": subject,
-            "description": f"{objective}\n\n{invitation_message}",
-            "start": {
-                "dateTime": start_datetime.isoformat(),
-                "timeZone": "Europe/Paris"
-            },
-            "end": {
-                "dateTime": end_datetime.isoformat(),
-                "timeZone": "Europe/Paris"
-            },
-            "attendees": [
-                {"email": p.get("email", f"user{p['id']}@example.com")} 
-                for p in participants
-            ],
-            "reminders": {
-                "useDefault": False,
-                "overrides": [
-                    {"method": "email", "minutes": 24 * 60},  # 1 jour avant
-                    {"method": "popup", "minutes": 30}  # 30 minutes avant
-                ]
-            }
-        }
     
     def _generate_fallback_invitation(
         self,
