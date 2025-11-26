@@ -1,5 +1,6 @@
-# Backend API (FastAPI)
+# Backend - Planificateur de Réunions
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 ## Rôle
 API REST qui gère la logique métier et orchestre la communication entre le frontend, la base de données et les agents.
@@ -10,10 +11,17 @@ API REST FastAPI pour un système de planification de réunions intelligent avec
 
 Le backend suit une architecture modulaire avec séparation claire des responsabilités et intégration d'agents IA :
 >>>>>>> Stashed changes
+=======
+API REST FastAPI pour un système de planification de réunions avec gestion des utilisateurs, types d'événements et événements calendrier.
 
-## Structure
+## Architecture
+
+Le backend suit une architecture modulaire avec séparation claire des responsabilités :
+>>>>>>> 6f7394038ff7f2687a9db683de6ac981fd7f054d
+
 ```
 backend/
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 ├── routes/       → Définition des endpoints HTTP
 ├── services/     → Logique métier (orchestration des agents)
@@ -56,26 +64,41 @@ backend/
 - **python-dotenv** : Gestion des variables d'environnement
 - **dateutil** : Parsing flexible des dates
 >>>>>>> Stashed changes
+=======
+├── main.py                 # Point d'entrée FastAPI
+├── config.py               # Configuration centralisée
+├── models/                 # Modèles de données SQLAlchemy
+│   ├── database.py         # Configuration base de données
+│   ├── user.py             # Modèle User
+│   ├── event_type.py       # Modèle EventType
+│   └── calendar_event.py   # Modèle CalendarEvent
+├── services/               # Logique métier
+│   ├── user_service.py     # Service utilisateurs
+│   ├── event_type_service.py # Service types d'événements
+│   └── calendar_event_service.py # Service événements calendrier
+└── routes/                 # Routes API
+    ├── users.py            # Endpoints utilisateurs
+    ├── event_types.py      # Endpoints types d'événements
+    └── calendar_events.py  # Endpoints événements calendrier
+```
 
-### Routes (`routes/`)
-Endpoints HTTP exposés au frontend :
-- `POST /api/meetings` : créer une demande de réunion
-- `GET /api/meetings/{id}` : récupérer l'état d'une réunion
-- `GET /api/calendars/{user}` : récupérer le calendrier d'un utilisateur
-- `GET /api/health` : état de santé du backend
+### Technologies utilisées
+- **FastAPI** : Framework web asynchrone
+- **SQLAlchemy** : ORM pour la base de données
+- **PyMySQL** : Pilote MySQL
+- **python-dotenv** : Gestion des variables d'environnement
+>>>>>>> 6f7394038ff7f2687a9db683de6ac981fd7f054d
 
-### Services (`services/`)
-Logique métier et orchestration :
-- `meeting_service.py` : coordonne les agents pour planifier la réunion
-- `calendar_service.py` : lit/écrit les calendriers depuis la DB
-- `agent_orchestrator.py` : envoie des messages MCP aux agents et collecte les réponses
+## Installation et Configuration
 
-### Models (`models/`)
-Modèles de données pour la DB et validation :
-- `meeting.py` : Meeting, Participant
-- `calendar.py` : CalendarEvent, Availability
-- `schemas.py` : Pydantic schemas pour validation API
+### Prérequis
+- Python 3.8+
+- MySQL Server
+- Base de données MySQL créée et remplie
 
+### 1. Créer l'environnement virtuel
+
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 ## Flux typique
 1. Frontend → `POST /api/meetings` avec participants et période
@@ -86,6 +109,8 @@ Modèles de données pour la DB et validation :
 6. Service → sauvegarde résultat en DB
 7. Route → renvoie réponse au frontend
 =======
+=======
+>>>>>>> 6f7394038ff7f2687a9db683de6ac981fd7f054d
 ```bash
 # Depuis le dossier racine du projet
 python -m venv planif_venv
@@ -114,6 +139,7 @@ pip install -r requirements.txt
 Éditez le fichier `.env` à la racine du projet :
 
 ```env
+<<<<<<< HEAD
 # Base de données
 DATABASE_URL=mysql+pymysql://user:votre_mot_de_passe@localhost/meeting_planner
 
@@ -131,6 +157,13 @@ INVITATION_TEMPERATURE=0.3
 ```
 
 Remplacez `user` par votre utilisateur MySQL, `votre_mot_de_passe` par votre mot de passe MySQL, et `votre_cle_api_groq` par votre clé API Groq (obtenue sur https://console.groq.com/).
+=======
+DATABASE_URL=mysql+pymysql://user:votre_mot_de_passe@localhost/meeting_planner
+DEBUG=True
+```
+
+Remplacez `user` par votre utilisateur et `votre_mot_de_passe` par votre mot de passe MySQL.
+>>>>>>> 6f7394038ff7f2687a9db683de6ac981fd7f054d
 
 ## Lancement du serveur
 
@@ -164,6 +197,7 @@ Une fois le serveur lancé, accédez à la documentation interactive :
 - `POST /api/calendar-events/` - Créer un événement
 - `PUT /api/calendar-events/{id}` - Modifier un événement
 - `DELETE /api/calendar-events/{id}` - Supprimer un événement
+<<<<<<< HEAD
 
 ### Orchestration de réunions (IA)
 - `POST /api/orchestrator/plan-meeting` - Planifier une réunion via texte naturel
@@ -270,3 +304,15 @@ GET /api/orchestrator/available-slots?participant_ids=1,2,3&start_date=2025-11-2
 
 Retourne une liste de créneaux avec scores de préférence.
 >>>>>>> Stashed changes
+=======
+- `GET /api/users/{user_id}/calendar-events/` - Événements d'un utilisateur
+- `GET /api/event-types/{type_id}/calendar-events/` - Événements d'un type
+
+## Développement
+
+### Ajouter une nouvelle entité
+1. Créer le modèle dans `models/`
+2. Créer le service dans `services/`
+3. Créer les routes dans `routes/`
+4. Importer et enregistrer dans `main.py`
+>>>>>>> 6f7394038ff7f2687a9db683de6ac981fd7f054d
