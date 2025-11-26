@@ -1,0 +1,10 @@
+Crée une invitation pour une réunion avec les informations suivantes:
+
+Objet: {subject}
+Participants: {participants}
+Date: {date}
+Heure de début: {start_time}
+Heure de fin: {end_time}
+Objectif: {objective}
+
+Génère un message d'invitation professionnel.

@@ -1,0 +1,10 @@
+Génère un message naturel résumant la réunion planifiée avec les détails suivants :
+
+Sujet : {subject}
+Créneau sélectionné : {datetime_range}
+Participants : {participant_names}
+Raisonnement : {reasoning}
+Événement Google Calendar : {google_calendar_status}
+Invitations email : {email_status}
+
+Message :
