@@ -1,0 +1,5 @@
+Analyse cette demande de réunion et extrais les informations:
+
+{request_text}
+
+Réponds uniquement avec le JSON valide.
