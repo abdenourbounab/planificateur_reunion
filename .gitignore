@@ -144,6 +144,11 @@ ENV/
 env.bak/
 venv.bak/
 
+# Google API Credentials
+backend/credentials/*.json
+backend/credentials/*.pickle
+!backend/credentials/.gitkeep
+
 # Spyder project settings
 .spyderproject
 .spyproject

@@ -14,6 +14,7 @@ from services.calendar_event_service import CalendarEventService
 from services.user_service import UserService
 from services.gmail_api_service import GmailAPIService
 from services.google_calendar_service import GoogleCalendarService
+from services.t2s import t2s
 from config import Config
 from dateutil import parser as date_parser
 import json
@@ -392,10 +393,19 @@ class MeetingOrchestrator:
             reasoning=reasoning
         )
         
-        # Retourner le résultat avec la réponse naturelle
+        # Convertir la réponse en audio avec t2s
+        audio_path = None
+        try:
+            audio_path = t2s(natural_response)
+            print(f"✅ Réponse audio générée: {audio_path}")
+        except Exception as e:
+            print(f"⚠️ Impossible de générer l'audio: {str(e)}")
+        
+        # Retourner le résultat avec la réponse naturelle et l'audio
         return {
             "success": True,
             "message": natural_response,
+            "audio_path": audio_path,
             "details": {
                 "meeting": {
                     "subject": subject,
