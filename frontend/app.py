@@ -1,8 +1,8 @@
 import streamlit as st
 import uuid
 import os
+import requests
 from datetime import datetime
-from gtts import gTTS
 from agent_api import send_to_agents_audio, send_to_agents_text
 
 # -----------------------------------------
@@ -16,39 +16,13 @@ USE_FAKE = False   # ← mettre False quand ton équipe backend sera prête
 st.set_page_config(page_title="Planificateur Intelligent", layout="wide")
 
 # -----------------------------------------
-# SESSION STATE INIT
+# THEME COLORS (MODE SOMBRE)
 # -----------------------------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
-
-# -----------------------------------------
-# MODE SOMBRE / CLAIR
-# -----------------------------------------
-mode = st.sidebar.radio("🎨 Mode", ["Clair", "Sombre"])
-
-if mode == "Sombre":
-    st.session_state.dark_mode = True
-else:
-    st.session_state.dark_mode = False
-
-# THEME COLORS
-if st.session_state.dark_mode:
-    background = "#1e1e1e"
-    text_color = "white"
-    card_bg = "#2c2c2c"
-    bubble_vocal = "#c62828"
-    bubble_text = "#1565c0"
-    history_bg = "#2c2c2c"
-else:
-    background = "linear-gradient(135deg, #d0e8ff, #bbdefb)"
-    text_color = "black"
-    card_bg = "white"
-    bubble_vocal = "#e53935"
-    bubble_text = "#1e88e5"
-    history_bg = "white"
+background = "#1e1e1e"
+text_color = "white"
+card_bg = "#2c2c2c"
+bubble_vocal = "#c62828"
+bubble_text = "#1565c0"
 
 # -----------------------------------------
 # CSS
@@ -70,9 +44,10 @@ body {{
 .result-item {{
     margin-bottom:8px;
     padding:10px;
-    background:#eef4ff;
+    background:{card_bg};
     border-left:5px solid #1565c0;
     border-radius:10px;
+    color: {text_color};
 }}
 .agent-log {{
     padding:15px;
@@ -86,28 +61,10 @@ body {{
     border-radius: 15px;
     margin-bottom: 8px;
     color: white;
-    max-width: 90%;
+    max-width: 100%;
 }}
 .vocal {{ background-color: {bubble_vocal}; }}
 .textmsg {{ background-color: {bubble_text}; }}
-.timestamp {{
-    font-size: 12px;
-    color: #bbb;
-}}
-.history-box {{
-    background: {history_bg};
-    padding: 15px;
-    border-radius: 15px;
-    height: 88vh;
-    overflow-y: scroll;
-    display: flex;
-    flex-direction: column-reverse;
-}}
-.separator {{
-    border-left: 2px solid #cccccc;
-    height: 88vh;
-    margin: auto;
-}}
 .stButton>button {{
     background:linear-gradient(90deg, #1e88e5,#1565c0);
     color:white;
@@ -119,163 +76,159 @@ body {{
 """, unsafe_allow_html=True)
 
 # -----------------------------------------
-# LAYOUT
-# -----------------------------------------
-col_history, col_sep, col_main = st.columns([1.2, 0.05, 3])
-
-# -----------------------------------------
-# HISTORIQUE
-# -----------------------------------------
-with col_history:
-
-    st.markdown("### 📜 Historique")
-
-    if st.button("🗑️ Effacer l'historique"):
-        st.session_state.history = []
-        st.rerun()
-
-    st.markdown("<div class='history-box'>", unsafe_allow_html=True)
-
-    for entry in st.session_state.history:
-        bubble_class = "vocal" if entry["type"] == "vocal" else "textmsg"
-        st.markdown(
-            f"<div class='message-bubble {bubble_class}'>{entry['content']}</div>",
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            f"<div class='timestamp'>🕒 {entry['time']}</div>",
-            unsafe_allow_html=True
-        )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# -----------------------------------------
-# SÉPARATEUR
-# -----------------------------------------
-with col_sep:
-    st.markdown("<div class='separator'></div>", unsafe_allow_html=True)
-
-# -----------------------------------------
 # INTERFACE PRINCIPALE
 # -----------------------------------------
-with col_main:
+st.title("Planificateur de Réunion Multi-Agents")
+st.write("Laissez une note vocale ou saisissez un texte, puis laissez les agents travailler !")
 
-    st.title("Planificateur de Réunion Multi-Agents")
-    st.write("Laissez une note vocale ou saisissez un texte, puis laissez les agents travailler !")
+st.markdown("<div class='card'>", unsafe_allow_html=True)
+col_audio, col_text = st.columns(2)
 
-    # --- CARD AUDIO + TEXTE ---
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    col_audio, col_text = st.columns(2)
+with col_audio:
+    audio = st.audio_input("🎙️ Enregistrer une note vocale")
 
-    with col_audio:
-        audio = st.audio_input("🎙️ Enregistrer une note vocale")
+with col_text:
+    user_text = st.text_area("✏️ Saisir un texte", placeholder="Décrivez la réunion...")
 
-    with col_text:
-        user_text = st.text_area("✏️ Saisir un texte", placeholder="Décrivez la réunion...")
+st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+temp_dir = "temp_audio"
+os.makedirs(temp_dir, exist_ok=True)
+audio_path = None
 
-    temp_dir = "temp_audio"
-    os.makedirs(temp_dir, exist_ok=True)
-    audio_path = None
+# AUDIO
+if audio:
+    audio_path = f"{temp_dir}/{uuid.uuid4()}.wav"
+    with open(audio_path, "wb") as f:
+        f.write(audio.getvalue())
 
-    # AUDIO
+    st.success("Audio bien enregistré !")
+    st.audio(audio)
+
+# -----------------------------------------
+# BOUTON LANCER AGENTS
+# -----------------------------------------
+if st.button("Lancer les Agents"):
+    
+    # Afficher le message utilisateur
     if audio:
-        audio_path = f"{temp_dir}/{uuid.uuid4()}.wav"
-        with open(audio_path, "wb") as f:
-            f.write(audio.getvalue())
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("### 👤 Votre demande")
+        st.markdown(
+            f"<div class='message-bubble vocal'>🎤 Note vocale envoyée</div>",
+            unsafe_allow_html=True
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    elif user_text.strip():
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("### 👤 Votre demande")
+        st.markdown(
+            f"<div class='message-bubble textmsg'>{user_text}</div>",
+            unsafe_allow_html=True
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.session_state.history.insert(0, {
-            "type": "vocal",
-            "content": "🎤 Note vocale envoyée",
-            "time": datetime.now().strftime("%H:%M:%S - %d/%m/%Y")
-        })
-
-        st.success("Audio bien enregistré !")
-        st.audio(audio)
-
-    # TEXTE
-    if user_text.strip():
-        st.session_state.history.insert(0, {
-            "type": "text",
-            "content": user_text,
-            "time": datetime.now().strftime("%H:%M:%S - %d/%m/%Y")
-        })
-
-    # -----------------------------------------
-    # BOUTON LANCER AGENTS
-    # -----------------------------------------
-    if st.button("Lancer les Agents"):
-
-        # MODE DÉMO — AUCUN BACKEND NÉCESSAIRE
-        if USE_FAKE:
-            response = {
-                "participants": ["Karim", "Fatou", "Alice"],
-                "subject": "Réunion de coordination du projet",
-                "possible_dates": ["2025-11-29", "2025-11-30"],
-                "validated_slot": "2025-11-30 14:00",
-                "invitation_message": "Bonjour, la réunion est programmée le 30 novembre à 14h.",
-                "logs": {
-                    "agent1": "Extraction réussie.",
-                    "agent2": "Disponibilités validées.",
-                    "agent3": "Message final généré."
-                }
+    # MODE DÉMO — AUCUN BACKEND NÉCESSAIRE
+    if USE_FAKE:
+        response = {
+            "success": True,
+            "message": "Bonjour, la réunion est programmée le 30 novembre à 14h.",
+            "participants": ["Karim", "Fatou", "Alice"],
+            "subject": "Réunion de coordination du projet",
+            "possible_dates": ["2025-11-29", "2025-11-30"],
+            "validated_slot": "2025-11-30 14:00",
+            "invitation_message": "Bonjour, la réunion est programmée le 30 novembre à 14h.",
+            "audio_path": None,
+            "logs": {
+                "agent1": "Extraction réussie.",
+                "agent2": "Disponibilités validées.",
+                "agent3": "Message final généré."
             }
+        }
+    else:
+        # MODE BACKEND RÉEL
+        if audio_path:
+            response = send_to_agents_audio(audio_path)
+        elif user_text.strip():
+            response = send_to_agents_text(user_text)
         else:
-            # MODE BACKEND RÉEL
-            if audio_path:
-                response = send_to_agents_audio(audio_path)
-            else:
-                response = send_to_agents_text(user_text)
+            st.error("❌ Veuillez fournir un audio ou un texte")
+            response = None
 
-        # -------------------------------------
-        # AFFICHAGE DES RÉSULTATS
-        # -------------------------------------
-        st.subheader("Résultat du Travail des Agents")
-
-        # Agent 1
+    # -------------------------------------
+    # AFFICHAGE DES RÉSULTATS
+    # -------------------------------------
+    if response and response.get("success"):
+        st.markdown("---")
+        st.markdown("### 🤖 Réponse de l'assistant")
+        
+        # Afficher le message de réponse
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>Extraction des informations</div>", unsafe_allow_html=True)
         st.markdown(
-            f"<div class='result-item'><b>Participants :</b> {', '.join(response['participants'])}</div>",
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            f"<div class='result-item'><b>Objet :</b> {response['subject']}</div>",
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            f"<div class='result-item'><b>Dates possibles :</b> {', '.join(response['possible_dates'])}</div>",
+            f"<div class='message-bubble' style='background-color: #4caf50; color: white;'>{response.get('message', 'Réunion planifiée avec succès')}</div>",
             unsafe_allow_html=True
         )
         st.markdown("</div>", unsafe_allow_html=True)
-
-        # Agent 2
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>Vérification de disponibilité</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div class='result-item'><b>Créneau validé :</b> {response['validated_slot']}</div>",
-            unsafe_allow_html=True
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Agent 3
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>Message d'invitation</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div class='result-item'>{response['invitation_message']}</div>",
-            unsafe_allow_html=True
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # TTS
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>Synthèse vocale (TTS)</div>", unsafe_allow_html=True)
-        tts_path = f"{temp_dir}/tts_{uuid.uuid4()}.mp3"
-        tts = gTTS(text=response["invitation_message"], lang="fr")
-        tts.save(tts_path)
-        st.success("La réponse a été convertie en audio !")
-        st.audio(tts_path)
-        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Afficher l'audio si disponible
+        if response.get("audio_path"):
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("<div class='section-title'>🔊 Synthèse vocale</div>", unsafe_allow_html=True)
+            
+            # Construire l'URL de l'audio
+            audio_filename = os.path.basename(response["audio_path"])
+            audio_url = f"http://localhost:8000/audio/{audio_filename}"
+            
+            try:
+                # Télécharger l'audio depuis le backend
+                audio_response = requests.get(audio_url)
+                if audio_response.status_code == 200:
+                    # Sauvegarder localement pour streamlit
+                    local_audio_path = f"{temp_dir}/response_{uuid.uuid4()}.wav"
+                    with open(local_audio_path, "wb") as f:
+                        f.write(audio_response.content)
+                    st.audio(local_audio_path)
+                else:
+                    st.warning("⚠️ Audio non disponible")
+            except Exception as e:
+                st.warning(f"⚠️ Impossible de charger l'audio: {str(e)}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Afficher les détails si disponibles
+        if response.get("details"):
+            details = response["details"]
+            
+            # Informations sur la réunion
+            if details.get("meeting"):
+                meeting = details["meeting"]
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>📅 Détails de la réunion</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='result-item'><b>Sujet :</b> {meeting.get('subject', 'N/A')}</div>",
+                    unsafe_allow_html=True
+                )
+                if meeting.get("selected_slot"):
+                    slot = meeting["selected_slot"]
+                    st.markdown(
+                        f"<div class='result-item'><b>Créneau :</b> {slot.get('start', 'N/A')} - {slot.get('end', 'N/A')}</div>",
+                        unsafe_allow_html=True
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Participants
+            if details.get("participants"):
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>👥 Participants</div>", unsafe_allow_html=True)
+                participant_names = [p.get('name', 'N/A') for p in details["participants"]]
+                st.markdown(
+                    f"<div class='result-item'>{', '.join(participant_names)}</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
+        
+    elif response:
+        # Afficher l'erreur
+        st.error(f"❌ Erreur: {response.get('error', 'Erreur inconnue')}")
 
        

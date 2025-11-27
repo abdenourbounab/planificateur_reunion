@@ -1,26 +1,40 @@
 import os
 from dotenv import load_dotenv
 from groq import Groq
-#from s2t import s2t
+import uuid
 
-#filename = "./audio/mon_audio.wav"
-#text = s2t(filename)
-text = "Bonjour, ceci est un test de synthèse vocale avec l'API Groq."
-def t2s(text):
+def t2s(text, output_dir=None):
+    """
+    Convertit du texte en audio en utilisant l'API Groq TTS
+    
+    Args:
+        text: Texte à convertir en audio
+        output_dir: Répertoire où sauvegarder le fichier audio (optionnel)
+        
+    Returns:
+        Chemin vers le fichier audio créé
+    """
     load_dotenv()
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
     if not GROQ_API_KEY:
-        raise RuntimeError("Clé api groq non defini")
+        raise RuntimeError("Clé api groq non définie")
 
-    client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    client = Groq(api_key=GROQ_API_KEY)
 
-    SCOPES = ["https://api.groq.com/openai/v1/audio/speech"]
-
-    speech_file_path = "audio/speech_groq.wav"
+    # Déterminer le répertoire de sortie
+    if output_dir is None:
+        output_dir = os.path.join(os.path.dirname(__file__), '..', 'temp_audio')
+    
+    # Créer le répertoire s'il n'existe pas
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Générer un nom de fichier unique
+    filename = f"response_{uuid.uuid4()}.wav"
+    speech_file_path = os.path.join(output_dir, filename)
+    
     model = "playai-tts"
-    voice = "Fritz-PlayAI"
-
+    voice = "Aaliyah-PlayAI"
     response_format = "wav"
 
     response = client.audio.speech.create(
@@ -31,7 +45,11 @@ def t2s(text):
     )
 
     response.write_to_file(speech_file_path)
-    print("Fichier vocal speech_groq.wav crée dans audio folder.")
+    print(f"Fichier vocal créé: {speech_file_path}")
+    
+    return speech_file_path
 
 if __name__ == '__main__':
-    t2s(text)
+    text = "Bonjour, ceci est un test de synthèse vocale avec l'API Groq."
+    audio_path = t2s(text)
+    print(f"Audio généré: {audio_path}")
