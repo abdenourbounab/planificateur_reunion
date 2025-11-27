@@ -143,6 +143,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+planif_venv/
 
 # Google API Credentials
 backend/credentials/*.json
