@@ -110,7 +110,7 @@ INVITATION_TEMPERATURE=0.7
 DEBUG=True
 ```
 
-### 6. Configurer Google APIs (optionnel)
+### 6. Configurer Google APIs
 
 Pour l'intégration Google Calendar et Gmail :
 
