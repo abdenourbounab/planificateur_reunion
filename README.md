@@ -124,7 +124,7 @@ Pour l'intégration Google Calendar et Gmail :
 
 ```bash
 cd backend
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+uvicorn main:app --reload
 ```
 
 Le backend sera accessible sur `http://127.0.0.1:8000`
@@ -187,42 +187,10 @@ INVITATION_TEMPERATURE = 0.7                 # Créativité (0-1)
 
 Modifiez les templates dans `backend/prompts/` pour adapter le comportement des agents.
 
-### Ajouter des utilisateurs
-
-Insérez des utilisateurs dans la base de données :
-
-```sql
-INSERT INTO users (first_name, last_name, email) VALUES
-('Jean', 'Dupont', 'jean.dupont@example.com'),
-('Marie', 'Martin', 'marie.martin@example.com');
-```
-
 ## 📚 Documentation détaillée
 
 - [Backend README](backend/README.md) - Architecture et API du backend
 - [Frontend README](frontend/README.md) - Interface utilisateur
-
-## 🐛 Résolution de problèmes
-
-### Erreur : "Aucun participant trouvé dans la base de données"
-
-Assurez-vous que l'utilisateur existe dans la table `users` avec le nom exact utilisé dans la requête.
-
-### Erreur de connexion au backend
-
-Vérifiez que le backend est bien lancé sur `http://127.0.0.1:8000` et que l'URL dans `frontend/agent_api.py` correspond.
-
-### Erreur de transcription audio
-
-Vérifiez votre clé API Groq dans le fichier `.env`.
-
-## 📝 Licence
-
-Projet académique - École
-
-## 👥 Auteurs
-
-Abdenour BOUNAB
 
 ## 🔗 Liens utiles
 
